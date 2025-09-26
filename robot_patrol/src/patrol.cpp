@@ -2,6 +2,7 @@
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include <algorithm>
 #include <cmath>
+#include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 class Patrol : public rclcpp::Node {
@@ -13,6 +14,7 @@ public:
         "/scan", qos, [this](const sensor_msgs::msg::LaserScan::SharedPtr msg) {
           return this->laser_callback(msg);
         });
+    _pub = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
   };
 
 private:
@@ -29,12 +31,29 @@ private:
     auto end_it = msg->ranges.begin() + end_idx;
 
     float min_distance = *std::min_element(start_it, end_it);
+    if (min_distance >= 0.35) {
+      move_forward();
+    } else {
+      stop();
+    }
     RCLCPP_INFO(get_logger(),
                 "Min distance: %.2f m in a indices, between %d - %d",
                 min_distance, start_idx, end_idx);
   }
 
+  void move_forward() {
+    geometry_msgs::msg::Twist cmd;
+    cmd.linear.x = 0.1;
+    _pub->publish(cmd);
+  }
+
+  void stop() {
+    geometry_msgs::msg::Twist cmd;
+    _pub->publish(cmd);
+  }
+
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr _laser_sub;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr _pub;
 };
 
 int main(int argc, char *argv[]) {
