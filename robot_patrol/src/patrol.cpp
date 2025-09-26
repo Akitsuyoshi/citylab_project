@@ -1,5 +1,7 @@
 #include "rclcpp/qos.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include <algorithm>
+#include <cmath>
 #include <rclcpp/rclcpp.hpp>
 
 class Patrol : public rclcpp::Node {
@@ -15,9 +17,21 @@ public:
 
 private:
   void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-    float min_distance =
-        *std::min_element(msg->ranges.begin(), msg->ranges.end());
-    RCLCPP_INFO(this->get_logger(), "Min distance: %.2f meters", min_distance);
+    // angle_min: -3.141590118408203 = -180 deg
+    // angle_max: 3.141590118408203 = 180 deg
+    // angle_increment: 0.06346646696329117 = 3.6 deg
+    // angle_min + -90_deg_idx * angle_increment = -90 degree
+    // angle_min + 90_deg_idx * angle_increment = 90 degree
+    int start_idx = (-M_PI / 2 - msg->angle_min) / msg->angle_increment;
+    int end_idx = (M_PI / 2 - msg->angle_min) / msg->angle_increment;
+
+    auto start_it = msg->ranges.begin() + start_idx;
+    auto end_it = msg->ranges.begin() + end_idx;
+
+    float min_distance = *std::min_element(start_it, end_it);
+    RCLCPP_INFO(get_logger(),
+                "Min distance: %.2f m in a indices, between %d - %d",
+                min_distance, start_idx, end_idx);
   }
 
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr _laser_sub;
