@@ -34,7 +34,19 @@ private:
     if (min_distance >= 0.35) {
       move_forward();
     } else {
-      stop();
+      float max_distance = 0.0;
+      int max_idx = -1;
+      for (size_t i = start_idx; i <= end_idx; i++) {
+      float current_max = msg->ranges[i];
+        if (std::isfinite(r) && r > max_distance) {
+            max_distance = current_max;
+            max_idx = i;
+        }
+      }
+
+      if (max_idx != -1) {
+        direction_ = msg->angle_min + max_idx * msg->angle_increment;        
+      }
     }
     RCLCPP_INFO(get_logger(),
                 "Min distance: %.2f m in a indices, between %d - %d",
@@ -54,6 +66,7 @@ private:
 
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr _laser_sub;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr _pub;
+  float direction_;
 };
 
 int main(int argc, char *argv[]) {
