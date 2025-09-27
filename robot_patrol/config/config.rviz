@@ -220,7 +220,7 @@ Visualization Manager:
         Axes Radius: 0.10000000149011612
         Color: 255; 255; 0
         Head Length: 0.10000000149011612
-        Head Radius: 0.004999999888241291
+        Head Radius: 0.05000000074505806
         Shaft Length: 0.25
         Shaft Radius: 0.02500000037252903
         Value: Arrow
@@ -278,7 +278,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 3.8459622859954834
+      Distance: 3.5
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -293,11 +293,31 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7103980183601379
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.8453980088233948
-    Saved: ~
+      Yaw: 3.141590118408203
+    Saved:
+      - Class: rviz_default_plugins/Orbit
+        Distance: 3.5
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Focal Point:
+          X: 0
+          Y: 0
+          Z: 0
+        Focal Shape Fixed Size: true
+        Focal Shape Size: 0.05000000074505806
+        Invert Z Axis: false
+        Name: Orbit
+        Near Clip Distance: 0.009999999776482582
+        Pitch: 1.5697963237762451
+        Target Frame: <Fixed Frame>
+        Value: Orbit (rviz)
+        Yaw: 3.141590118408203
 Window Geometry:
   Displays:
     collapsed: false
