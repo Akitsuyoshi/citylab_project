@@ -8,8 +8,10 @@
 #include <cmath>
 #include <exception>
 #include <geometry_msgs/msg/twist.hpp>
+#include <iterator>
 #include <mutex>
 #include <rclcpp/rclcpp.hpp>
+#include <vector>
 
 class Patrol : public rclcpp::Node {
 public:
@@ -39,30 +41,46 @@ private:
       return;
     }
 
-    // indx for forward +- 30 degree;
-    int foward_start = (-M_PI / 6 - msg->angle_min) / msg->angle_increment;
-    int foward_end = (M_PI / 6 - msg->angle_min) / msg->angle_increment;
-    float min_distance = *std::min_element(msg->ranges.begin() + foward_start,
-                                           msg->ranges.begin() + foward_end);
-    if (min_distance >= 0.35) {
+    // indx for forward +-18 degree on linear.x axis;
+    int forward_start = (-M_PI / 10 - msg->angle_min) / msg->angle_increment;
+    int forward_end = (M_PI / 10 - msg->angle_min) / msg->angle_increment;
+    // check forward(+-18 degree) closest obstacle
+    auto min_foward_distance = std::min_element(
+        msg->ranges.begin() + forward_start, msg->ranges.begin() + forward_end);
+    if (*min_foward_distance >= 0.35) {
       set_direction(0.0f);
     } else {
-      float max_distance = 0.0;
-      int max_idx = -1;
-      for (int i = start_idx; i <= end_idx; i++) {
-        float ray = msg->ranges[i];
-        if (std::isfinite(ray) && ray > max_distance) {
-          max_distance = ray;
-          max_idx = i;
+      //  check foward(+-90 degree) closest obstacle
+      auto min_distance = std::min_element(msg->ranges.begin() + start_idx,
+                                           msg->ranges.begin() + end_idx);
+      if (*min_distance < 0.2) {
+        int min_idx = std::distance(msg->ranges.begin(), min_distance);
+        float min_angle = msg->angle_min + min_idx * msg->angle_increment;
+        float dir = (min_angle < 0 ? +M_PI / 2 : -M_PI / 2);
+        set_direction(dir);
+      } else {
+        int max_idx = get_opened_ray_idx(start_idx, end_idx, msg->ranges);
+        if (max_idx != -1) {
+          set_direction(msg->angle_min + max_idx * msg->angle_increment);
+        } else {
+          stop_robot();
         }
       }
+    }
+  }
 
-      if (max_idx != -1) {
-        set_direction(msg->angle_min + max_idx * msg->angle_increment);
-      } else {
-        stop_robot();
+  int get_opened_ray_idx(int start_idx, int end_idx,
+                         const std::vector<float> &ranges) const {
+    float max_distance = 0.0;
+    int max_idx = -1;
+    for (int i = start_idx; i <= end_idx; i++) {
+      float ray = ranges[i];
+      if (std::isfinite(ray) && ray > max_distance) {
+        max_distance = ray;
+        max_idx = i;
       }
     }
+    return max_idx;
   }
 
   void move_robot() {
