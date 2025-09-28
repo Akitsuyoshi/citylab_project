@@ -1,3 +1,4 @@
+#include "rclcpp/callback_group.hpp"
 #include "rclcpp/executors.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/qos.hpp"
@@ -17,14 +18,21 @@ class Patrol : public rclcpp::Node {
 public:
   Patrol() : Node("patrol_node"), direction_(0.0f) {
     RCLCPP_INFO(get_logger(), "Here node is started");
+    reentrant_group_1_ =
+        create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+    rclcpp::SubscriptionOptions sub_options;
+    sub_options.callback_group = reentrant_group_1_;
     auto qos = rclcpp::QoS(10).reliability(rclcpp::ReliabilityPolicy::Reliable);
     _laser_sub = create_subscription<sensor_msgs::msg::LaserScan>(
-        "/scan", qos, [this](const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+        "/scan", qos,
+        [this](const sensor_msgs::msg::LaserScan::SharedPtr msg) {
           return this->laser_callback(msg);
-        });
+        },
+        sub_options);
     _pub = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
-    _timer = create_wall_timer(std::chrono::milliseconds(100),
-                               [this]() { return this->move_robot(); });
+    _timer = create_wall_timer(
+        std::chrono::milliseconds(100), [this]() { return this->move_robot(); },
+        reentrant_group_1_);
   };
   ~Patrol() { stop_robot(); };
 
@@ -41,9 +49,9 @@ private:
       return;
     }
 
-    // indx for forward +-18 degree on linear.x axis;
-    int forward_start = (-M_PI / 10 - msg->angle_min) / msg->angle_increment;
-    int forward_end = (M_PI / 10 - msg->angle_min) / msg->angle_increment;
+    // indx for forward +-22.5 degree on linear.x axis;
+    int forward_start = (-M_PI / 8 - msg->angle_min) / msg->angle_increment;
+    int forward_end = (M_PI / 8 - msg->angle_min) / msg->angle_increment;
     // check forward(+-18 degree) closest obstacle
     auto min_foward_distance = std::min_element(
         msg->ranges.begin() + forward_start, msg->ranges.begin() + forward_end);
@@ -53,10 +61,10 @@ private:
       //  check foward(+-90 degree) closest obstacle
       auto min_distance = std::min_element(msg->ranges.begin() + start_idx,
                                            msg->ranges.begin() + end_idx);
-      if (*min_distance < 0.2) {
+      if (*min_distance < 0.25) {
         int min_idx = std::distance(msg->ranges.begin(), min_distance);
         float min_angle = msg->angle_min + min_idx * msg->angle_increment;
-        float dir = (min_angle < 0 ? +M_PI / 2 : -M_PI / 2);
+        float dir = (min_angle < 0) ? +M_PI / 2 : -M_PI / 2;
         set_direction(dir);
       } else {
         int max_idx = get_opened_ray_idx(start_idx, end_idx, msg->ranges);
@@ -100,7 +108,7 @@ private:
     }
     std::lock_guard<std::mutex> lck(mutex_);
     direction_ = angle;
-    RCLCPP_INFO(get_logger(), "Angle is set at : %.2f", angle);
+    // RCLCPP_INFO(get_logger(), "Angle is set at : %.2f", angle);
   }
 
   float get_direction() {
@@ -117,6 +125,8 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr _laser_sub;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr _pub;
   rclcpp::TimerBase::SharedPtr _timer;
+  rclcpp::CallbackGroup::SharedPtr reentrant_group_1_;
+
   float direction_;
   std::mutex mutex_;
 };
@@ -124,7 +134,14 @@ private:
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<Patrol>();
-  rclcpp::spin(node);
+  rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(),
+                                                    2);
+  executor.add_node(node);
+  try {
+    executor.spin();
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(node->get_logger(), "Exception: %s", e.what());
+  }
   rclcpp::shutdown();
   return 0;
 }
