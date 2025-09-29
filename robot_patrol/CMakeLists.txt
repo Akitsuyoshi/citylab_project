@@ -10,12 +10,15 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 # Create executable
 add_executable(robot_patrol_node src/patrol.cpp)
 
 # Add dependencies
-ament_target_dependencies(robot_patrol_node rclcpp sensor_msgs geometry_msgs)
+ament_target_dependencies(robot_patrol_node rclcpp sensor_msgs geometry_msgs nav_msgs tf2 tf2_geometry_msgs)
 
 # Install executables
 install(TARGETS robot_patrol_node
