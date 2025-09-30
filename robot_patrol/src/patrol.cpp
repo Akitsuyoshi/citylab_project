@@ -41,25 +41,25 @@ public:
     rclcpp::SubscriptionOptions sub_options;
     sub_options.callback_group = reentrant_group_1_;
     auto qos = rclcpp::QoS(10).reliability(rclcpp::ReliabilityPolicy::Reliable);
-    _laser_sub = create_subscription<sensor_msgs::msg::LaserScan>(
+    laser_sub_ = create_subscription<sensor_msgs::msg::LaserScan>(
         "/scan", qos,
         [this](const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-          return this->laser_callback(msg);
+          return laser_callback(msg);
         },
         sub_options);
-    _odom_sub = create_subscription<nav_msgs::msg::Odometry>(
+    odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
         "/odom", 10,
         [this](const nav_msgs::msg::Odometry::SharedPtr msg) {
-          return this->odom_callback(msg);
+          return odom_callback(msg);
         },
         sub_options);
-    _pub = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
-    _timer = create_wall_timer(
+    pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
+    timer_ = create_wall_timer(
         std::chrono::milliseconds(100),
-        [this]() { return this->move_around_robot(); }, reentrant_group_1_);
+        [this]() { return move_around_robot(); }, reentrant_group_1_);
   };
 
-  int get_lap_count() {
+  int get_lap_count() const {
     std::lock_guard<std::mutex> lck(mutex_);
     return lap_count_;
   }
@@ -67,7 +67,7 @@ public:
   void stop_robot() {
     RCLCPP_INFO(get_logger(), "Robot is stopped");
     geometry_msgs::msg::Twist cmd;
-    _pub->publish(cmd);
+    pub_->publish(cmd);
   }
 
 private:
@@ -182,7 +182,7 @@ private:
     }
   }
 
-  double norm_angle(double a) {
+  double norm_angle(double a) const {
     while (a > M_PI)
       a -= 2 * M_PI;
     while (a < -M_PI)
@@ -213,23 +213,23 @@ private:
     geometry_msgs::msg::Twist cmd;
     cmd.linear.x = 0.1;
     cmd.angular.z = get_direction() / 2;
-    _pub->publish(cmd);
+    pub_->publish(cmd);
   }
 
   void turn_robot() {
     geometry_msgs::msg::Twist cmd;
     cmd.angular.z = 0.4;
-    _pub->publish(cmd);
+    pub_->publish(cmd);
   }
 
   void approach_robot() {
     geometry_msgs::msg::Twist cmd;
     cmd.linear.x = 0.1;
     cmd.angular.z = std::clamp(1.0 * get_target_yaw(), -0.3, 0.3);
-    _pub->publish(cmd);
+    pub_->publish(cmd);
   }
 
-  double calculate_distance(const Position &a, const Position &b) {
+  double calculate_distance(const Position &a, const Position &b) const {
     return std::sqrt(std::pow(a.x - b.x, 2) + std::pow(a.y - b.y, 2));
   }
 
@@ -245,12 +245,12 @@ private:
     direction_ = angle;
   }
 
-  float get_direction() {
+  float get_direction() const {
     std::lock_guard<std::mutex> lck(mutex_);
     return direction_;
   }
 
-  double get_target_yaw() {
+  double get_target_yaw() const {
     std::lock_guard<std::mutex> lck(mutex_);
     return target_yaw_;
   }
@@ -260,7 +260,7 @@ private:
     target_yaw_ = target_yaw;
   }
 
-  MissionState get_mission_state() {
+  MissionState get_mission_state() const {
     std::lock_guard<std::mutex> lck(mutex_);
     return mission_state_;
   }
@@ -270,14 +270,15 @@ private:
     mission_state_ = mission_state;
   }
 
-  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr _laser_sub;
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr _odom_sub;
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr _pub;
-  rclcpp::TimerBase::SharedPtr _timer;
+  mutable std::mutex mutex_;
 
+  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
+  rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::CallbackGroup::SharedPtr reentrant_group_1_;
+
   float direction_;
-  std::mutex mutex_;
   Position home_position_;
   Position current_position_;
   bool init_home_{false};
