@@ -45,11 +45,11 @@ private:
         {"left", get_total_dist_sec(front_end, end_idx, msg.ranges)},
     };
 
-    auto min_it = std::min_element(
+    auto max_it = std::max_element(
         dirs.begin(), dirs.end(),
         [](const auto &a, const auto &b) { return a.second < b.second; });
 
-    response->direction = min_it->first;
+    response->direction = max_it->first;
     RCLCPP_INFO(get_logger(), "Service Completed");
   }
 
