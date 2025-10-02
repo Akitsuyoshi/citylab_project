@@ -18,13 +18,15 @@ find_package(custom_interfaces REQUIRED)
 # Create executable
 add_executable(robot_patrol_node src/patrol.cpp)
 add_executable(direction_service_server src/direction_service.cpp)
+add_executable(test_direction_service_client src/test_service.cpp)
 
 # Add dependencies
 ament_target_dependencies(robot_patrol_node rclcpp sensor_msgs geometry_msgs nav_msgs tf2 tf2_geometry_msgs)
 ament_target_dependencies(direction_service_server rclcpp custom_interfaces)
+ament_target_dependencies(test_direction_service_client rclcpp custom_interfaces sensor_msgs)
 
 # Install executables
-install(TARGETS robot_patrol_node direction_service_server
+install(TARGETS robot_patrol_node direction_service_server test_direction_service_client
   DESTINATION lib/${PROJECT_NAME})
 
 # Install launch files
