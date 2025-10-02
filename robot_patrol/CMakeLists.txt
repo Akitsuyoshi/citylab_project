@@ -13,7 +13,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
+find_package(custom_interfaces REQUIRED)
 
 # Create executable
 add_executable(robot_patrol_node src/patrol.cpp)
@@ -21,7 +21,7 @@ add_executable(direction_service_server src/direction_service.cpp)
 
 # Add dependencies
 ament_target_dependencies(robot_patrol_node rclcpp sensor_msgs geometry_msgs nav_msgs tf2 tf2_geometry_msgs)
-ament_target_dependencies(direction_service_server rclcpp std_srvs)
+ament_target_dependencies(direction_service_server rclcpp custom_interfaces)
 
 # Install executables
 install(TARGETS robot_patrol_node direction_service_server
