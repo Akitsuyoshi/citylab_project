@@ -92,7 +92,7 @@ public:
 private:
   void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
     int size = static_cast<int>(msg->ranges.size()) - 1;
-    // indx for forward +-24 degree on linear.x axis;
+    // indx for forward +-30 degree on linear.x axis;
     int forward_start =
         std::clamp(static_cast<int>(std::round((-M_PI / 6 - msg->angle_min) /
                                                msg->angle_increment)),
@@ -102,7 +102,6 @@ private:
                                                msg->angle_increment)),
                    0, size);
 
-    // check forward(+-18 degree) closest obstacle
     auto min_foward_distance = std::min_element(
         msg->ranges.begin() + forward_start, msg->ranges.begin() + forward_end);
     if (*min_foward_distance >= 0.4) {
