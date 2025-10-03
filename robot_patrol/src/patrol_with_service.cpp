@@ -92,7 +92,7 @@ public:
 private:
   void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
     int size = static_cast<int>(msg->ranges.size()) - 1;
-    // indx for forward +-22.5 degree on linear.x axis;
+    // indx for forward +-24 degree on linear.x axis;
     int forward_start =
         std::clamp(static_cast<int>(std::round((-M_PI / 6 - msg->angle_min) /
                                                msg->angle_increment)),
@@ -105,18 +105,15 @@ private:
     // check forward(+-18 degree) closest obstacle
     auto min_foward_distance = std::min_element(
         msg->ranges.begin() + forward_start, msg->ranges.begin() + forward_end);
-    if (*min_foward_distance >= 0.35) {
+    if (*min_foward_distance >= 0.4) {
       set_direction("forward");
     } else {
       auto request = std::make_shared<GetDirection::Request>();
       request->laser_data = *msg;
-      RCLCPP_INFO(get_logger(), "Service Request");
       auto fut = client_->async_send_request(
           request, [this](rclcpp::Client<GetDirection>::SharedFuture result) {
             auto response = result.get();
             set_direction(response->direction);
-            RCLCPP_INFO(get_logger(), "Service Response: %s",
-                        response->direction.c_str());
           });
     }
   }
@@ -211,7 +208,8 @@ private:
     cmd.linear.x = 0.1;
     std::string dir = get_direction();
     if (dir.empty()) {
-      RCLCPP_INFO(get_logger(), "Direction is not set yet");
+      RCLCPP_INFO(get_logger(),
+                  "Waiting for /scan topic, direction is not set yet");
       return;
     } else if (dir == "right") {
       cmd.angular.z = -0.6;
