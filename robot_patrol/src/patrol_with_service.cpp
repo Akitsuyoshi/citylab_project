@@ -1,5 +1,7 @@
+#include "custom_interfaces/srv/get_direction.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/callback_group.hpp"
+#include "rclcpp/exceptions/exceptions.hpp"
 #include "rclcpp/executors.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/qos.hpp"
@@ -33,9 +35,26 @@ enum MissionState {
 };
 
 class Patrol : public rclcpp::Node {
+  using GetDirection = custom_interfaces::srv::GetDirection;
+
 public:
-  Patrol() : Node("patrol_node"), direction_(0.0f) {
+  Patrol() : Node("robot_patrol_with_service") {
     RCLCPP_INFO(get_logger(), "Here node is started");
+    std::string name_service = "/direction_service";
+    client_ = create_client<GetDirection>(name_service);
+
+    // Wait for the service to be available (checks every second)
+    while (!client_->wait_for_service(std::chrono::seconds(1))) {
+      if (!rclcpp::ok()) {
+        RCLCPP_ERROR(get_logger(),
+                     "Interrupted while waiting for the service. Exiting.");
+        return;
+      }
+      RCLCPP_INFO(get_logger(), "Service %s not available, waiting again...",
+                  name_service.c_str());
+    }
+    RCLCPP_INFO(get_logger(), "Service Client Ready");
+
     reentrant_group_1_ =
         create_callback_group(rclcpp::CallbackGroupType::Reentrant);
     rclcpp::SubscriptionOptions sub_options;
@@ -72,69 +91,47 @@ public:
 
 private:
   void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-    // angle_min + -90_deg_idx * angle_increment = -90 degree
-    // angle_min + 90_deg_idx * angle_increment = 90 degree
-    int start_idx = (-M_PI / 2 - msg->angle_min) / msg->angle_increment;
-    start_idx = std::max(0, start_idx);
-    int end_idx = (M_PI / 2 - msg->angle_min) / msg->angle_increment;
-    end_idx = std::min((int)msg->ranges.size() - 1, end_idx);
-    if (start_idx >= end_idx) {
-      stop_robot();
-      return;
-    }
+    int size = static_cast<int>(msg->ranges.size()) - 1;
+    // indx for forward +-22.5 degree on linear.x axis;
+    int forward_start =
+        std::clamp(static_cast<int>(std::round((-M_PI / 6 - msg->angle_min) /
+                                               msg->angle_increment)),
+                   0, size);
+    int forward_end =
+        std::clamp(static_cast<int>(std::round((M_PI / 6 - msg->angle_min) /
+                                               msg->angle_increment)),
+                   0, size);
 
-    // indx for forward +-20 degree on linear.x axis;
-    int forward_start = (-M_PI / 9 - msg->angle_min) / msg->angle_increment;
-    int forward_end = (M_PI / 9 - msg->angle_min) / msg->angle_increment;
     // check forward(+-18 degree) closest obstacle
     auto min_foward_distance = std::min_element(
         msg->ranges.begin() + forward_start, msg->ranges.begin() + forward_end);
     if (*min_foward_distance >= 0.35) {
-      set_direction(0.0f);
+      set_direction("forward");
     } else {
-      //  check foward(+-90 degree) closest obstacle
-      auto min_distance = std::min_element(msg->ranges.begin() + start_idx,
-                                           msg->ranges.begin() + end_idx);
-      if (*min_distance < 0.25) {
-        int min_idx = std::distance(msg->ranges.begin(), min_distance);
-        float min_angle = msg->angle_min + min_idx * msg->angle_increment;
-        float dir = (min_angle < 0) ? +M_PI / 2 : -M_PI / 2;
-        set_direction(dir);
-      } else {
-        int max_idx = get_opened_ray_idx(start_idx, end_idx, msg->ranges);
-        if (max_idx != -1) {
-          set_direction(msg->angle_min + max_idx * msg->angle_increment);
-        } else {
-          stop_robot();
-        }
-      }
+      auto request = std::make_shared<GetDirection::Request>();
+      request->laser_data = *msg;
+      RCLCPP_INFO(get_logger(), "Service Request");
+      auto fut = client_->async_send_request(
+          request, [this](rclcpp::Client<GetDirection>::SharedFuture result) {
+            auto response = result.get();
+            set_direction(response->direction);
+            RCLCPP_INFO(get_logger(), "Service Response: %s",
+                        response->direction.c_str());
+          });
     }
-  }
-
-  int get_opened_ray_idx(int start_idx, int end_idx,
-                         const std::vector<float> &ranges) const {
-    float max_distance = 0.0;
-    int max_idx = -1;
-    for (int i = start_idx; i <= end_idx; i++) {
-      float ray = ranges[i];
-      if (std::isfinite(ray) && ray > max_distance) {
-        max_distance = ray;
-        max_idx = i;
-      }
-    }
-    return max_idx;
   }
 
   void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
-    current_position_.x = msg->pose.pose.position.x;
-    current_position_.y = msg->pose.pose.position.y;
+    Position current_position;
+    current_position.x = msg->pose.pose.position.x;
+    current_position.y = msg->pose.pose.position.y;
     auto q = msg->pose.pose.orientation;
     tf2::Quaternion quat(q.x, q.y, q.z, q.w);
     double roll, pitch;
     tf2::Matrix3x3(quat).getRPY(roll, pitch, current_yaw_);
 
     if (!init_home_) {
-      home_position_ = current_position_;
+      home_position_ = current_position;
       init_home_ = true;
       RCLCPP_INFO(get_logger(), "Home is set at (%.3f, %.3f)", home_position_.x,
                   home_position_.y);
@@ -142,7 +139,7 @@ private:
 
     MissionState mission_state = get_mission_state();
     double distance_to_home =
-        calculate_distance(current_position_, home_position_);
+        calculate_distance(current_position, home_position_);
     if (mission_state == LEAVING) {
       if (distance_to_home > 1) {
         set_mission_state(RETURNING);
@@ -154,8 +151,8 @@ private:
         RCLCPP_INFO(get_logger(), "Approaching");
       }
     } else if (mission_state == APPROACHING) {
-      double target_angle = std::atan2(home_position_.y - current_position_.y,
-                                       home_position_.x - current_position_.x);
+      double target_angle = std::atan2(home_position_.y - current_position.y,
+                                       home_position_.x - current_position.x);
       double err = norm_angle(target_angle - current_yaw_);
       if (std::fabs(err) > 0.2) {
         set_target_yaw(err);
@@ -212,7 +209,22 @@ private:
   void move_robot() {
     geometry_msgs::msg::Twist cmd;
     cmd.linear.x = 0.1;
-    cmd.angular.z = get_direction() / 2;
+    std::string dir = get_direction();
+    if (dir.empty()) {
+      RCLCPP_INFO(get_logger(), "Direction is not set yet");
+      return;
+    } else if (dir == "right") {
+      cmd.angular.z = -0.6;
+    } else if (dir == "forward") {
+      cmd.angular.z = 0.0;
+    } else if (dir == "left") {
+      cmd.angular.z = 0.6;
+    } else {
+      RCLCPP_ERROR(get_logger(), "Unregisterd directioin is set: %s",
+                   dir.c_str());
+      stop_robot();
+      return;
+    }
     pub_->publish(cmd);
   }
 
@@ -233,19 +245,12 @@ private:
     return std::sqrt(std::pow(a.x - b.x, 2) + std::pow(a.y - b.y, 2));
   }
 
-  void set_direction(float angle) {
-    // // normalize angle
-    if (angle > M_PI / 2) {
-      angle = M_PI / 2;
-    }
-    if (angle < -M_PI / 2) {
-      angle = -M_PI / 2;
-    }
+  void set_direction(std::string direction) {
     std::lock_guard<std::mutex> lck(mutex_);
-    direction_ = angle;
+    direction_ = direction;
   }
 
-  float get_direction() const {
+  std::string get_direction() const {
     std::lock_guard<std::mutex> lck(mutex_);
     return direction_;
   }
@@ -277,10 +282,10 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::CallbackGroup::SharedPtr reentrant_group_1_;
+  rclcpp::Client<GetDirection>::SharedPtr client_;
 
-  float direction_;
+  std::string direction_{""};
   Position home_position_;
-  Position current_position_;
   bool init_home_{false};
   MissionState mission_state_{LEAVING};
   double goal_tolerance_{0.2};

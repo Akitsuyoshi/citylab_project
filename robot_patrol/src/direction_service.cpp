@@ -29,10 +29,23 @@ private:
                   "angle_increment in laser_scan needs to be more than 0");
       return;
     }
-    int start_idx = (-M_PI / 2 - msg.angle_min) / msg.angle_increment;
-    int front_start = (-M_PI / 6 - msg.angle_min) / msg.angle_increment;
-    int front_end = (M_PI / 6 - msg.angle_min) / msg.angle_increment;
-    int end_idx = (M_PI / 2 - msg.angle_min) / msg.angle_increment;
+    int size = static_cast<int>(msg.ranges.size()) - 1;
+    int start_idx =
+        std::clamp(static_cast<int>(std::round((-M_PI / 2 - msg.angle_min) /
+                                               msg.angle_increment)),
+                   0, size);
+    int front_start =
+        std::clamp(static_cast<int>(std::round((-M_PI / 6 - msg.angle_min) /
+                                               msg.angle_increment)),
+                   0, size);
+    int front_end =
+        std::clamp(static_cast<int>(std::round((M_PI / 6 - msg.angle_min) /
+                                               msg.angle_increment)),
+                   0, size);
+    int end_idx =
+        std::clamp(static_cast<int>(std::round((M_PI / 2 - msg.angle_min) /
+                                               msg.angle_increment)),
+                   0, size);
     if (start_idx >= front_start || front_start >= front_end ||
         front_end >= end_idx) {
       RCLCPP_WARN(get_logger(), "angle_ranges cannot be split into 3 sections");
@@ -41,7 +54,7 @@ private:
 
     std::vector<std::pair<std::string, float>> dirs = {
         {"right", get_total_dist_sec(start_idx, front_start, msg.ranges)},
-        {"front", get_total_dist_sec(front_start, front_end, msg.ranges)},
+        {"forward", get_total_dist_sec(front_start, front_end, msg.ranges)},
         {"left", get_total_dist_sec(front_end, end_idx, msg.ranges)},
     };
 
