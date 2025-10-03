@@ -92,13 +92,13 @@ public:
 private:
   void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
     int size = static_cast<int>(msg->ranges.size()) - 1;
-    // indx for forward +-22.5 degree on linear.x axis;
+    // indx for forward +-24 degree on linear.x axis;
     int forward_start =
-        std::clamp(static_cast<int>(std::round((-M_PI / 6 - msg->angle_min) /
+        std::clamp(static_cast<int>(std::round((-M_PI / 7.5 - msg->angle_min) /
                                                msg->angle_increment)),
                    0, size);
     int forward_end =
-        std::clamp(static_cast<int>(std::round((M_PI / 6 - msg->angle_min) /
+        std::clamp(static_cast<int>(std::round((M_PI / 7.5 - msg->angle_min) /
                                                msg->angle_increment)),
                    0, size);
 
@@ -214,11 +214,11 @@ private:
       RCLCPP_INFO(get_logger(), "Direction is not set yet");
       return;
     } else if (dir == "right") {
-      cmd.angular.z = -0.6;
+      cmd.angular.z = -0.75;
     } else if (dir == "forward") {
       cmd.angular.z = 0.0;
     } else if (dir == "left") {
-      cmd.angular.z = 0.6;
+      cmd.angular.z = 0.75;
     } else {
       RCLCPP_ERROR(get_logger(), "Unregisterd directioin is set: %s",
                    dir.c_str());
