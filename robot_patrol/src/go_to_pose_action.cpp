@@ -7,6 +7,7 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "rclcpp_action/server.hpp"
 #include "rclcpp_action/server_goal_handle.hpp"
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <geometry_msgs/msg/twist.hpp>
@@ -54,20 +55,23 @@ public:
   GoToPose() : Node("action_server") {
     using namespace std::placeholders;
 
-    odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
-        "/odom", 10, std::bind(&GoToPose::odom_callback, this, _1));
-
     action_server_ = rclcpp_action::create_server<GoToPoseAction>(
         this, "go_to_pose", std::bind(&GoToPose::handle_goal, this, _1, _2),
         std::bind(&GoToPose::handle_cancel, this, _1),
         std::bind(&GoToPose::handle_accepted, this, _1));
-
     RCLCPP_INFO(get_logger(), "Action Server Ready");
+
+    odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+        "/odom", 10, std::bind(&GoToPose::odom_callback, this, _1));
 
     pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
 
     timer_ = create_wall_timer(std::chrono::milliseconds(100),
                                std::bind(&GoToPose::move_to_desired_pos, this));
+
+    timer_fb_ =
+        create_wall_timer(std::chrono::seconds(1),
+                          std::bind(&GoToPose::send_position_feedback, this));
   }
 
 private:
@@ -103,7 +107,6 @@ private:
     // convert from degree to radiant
     desired_pos_.theta = goal->goal_pos.theta * M_PI / 180.0;
 
-    // auto feedback = std::make_shared<GoToPoseAction::Feedback>();
     goal_active_ = true;
   }
 
@@ -152,11 +155,24 @@ private:
     }
   }
 
+  void send_position_feedback() {
+    std::lock_guard<std::mutex> lck(mutex_);
+    if (!goal_active_ || !goal_handle_) {
+      return;
+    }
+    auto feedback = std::make_shared<GoToPoseAction::Feedback>();
+    feedback->current_pos.x = current_pos_.x;
+    feedback->current_pos.y = current_pos_.y;
+    feedback->current_pos.theta = current_pos_.theta * 180.0 / M_PI;
+    goal_handle_->publish_feedback(feedback);
+  }
+
   std::mutex mutex_;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
   rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::TimerBase::SharedPtr timer_fb_;
   rclcpp_action::Server<GoToPoseAction>::SharedPtr action_server_;
   std::shared_ptr<GoalHandle> goal_handle_;
   Pose2D desired_pos_;
