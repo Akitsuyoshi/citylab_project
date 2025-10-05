@@ -61,17 +61,24 @@ public:
         std::bind(&GoToPose::handle_accepted, this, _1));
     RCLCPP_INFO(get_logger(), "Action Server Ready");
 
+    reentrant_group_1_ =
+        create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+    rclcpp::SubscriptionOptions sub_options;
+    sub_options.callback_group = reentrant_group_1_;
+
     odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
-        "/odom", 10, std::bind(&GoToPose::odom_callback, this, _1));
+        "/odom", 10, std::bind(&GoToPose::odom_callback, this, _1),
+        sub_options);
 
     pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
 
     timer_ = create_wall_timer(std::chrono::milliseconds(100),
-                               std::bind(&GoToPose::move_to_desired_pos, this));
+                               std::bind(&GoToPose::move_to_desired_pos, this),
+                               reentrant_group_1_);
 
-    timer_fb_ =
-        create_wall_timer(std::chrono::seconds(1),
-                          std::bind(&GoToPose::send_position_feedback, this));
+    timer_fb_ = create_wall_timer(
+        std::chrono::seconds(1),
+        std::bind(&GoToPose::send_position_feedback, this), reentrant_group_1_);
   }
 
 private:
@@ -167,6 +174,7 @@ private:
 
   std::mutex mutex_;
 
+  rclcpp::CallbackGroup::SharedPtr reentrant_group_1_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
   rclcpp::TimerBase::SharedPtr timer_;
@@ -182,7 +190,10 @@ private:
 int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<GoToPose>();
-  rclcpp::spin(node);
+  rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(),
+                                                    2);
+  executor.add_node(node);
+  executor.spin();
   rclcpp::shutdown();
   return 0;
 }
