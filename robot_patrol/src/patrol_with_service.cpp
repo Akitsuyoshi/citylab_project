@@ -1,4 +1,3 @@
-#include "custom_interfaces/srv/get_direction.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/callback_group.hpp"
 #include "rclcpp/exceptions/exceptions.hpp"
@@ -7,6 +6,7 @@
 #include "rclcpp/qos.hpp"
 #include "rclcpp/timer.hpp"
 #include "rclcpp/utilities.hpp"
+#include "robot_patrol/srv/get_direction.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include <algorithm>
 #include <chrono>
@@ -35,7 +35,7 @@ enum MissionState {
 };
 
 class Patrol : public rclcpp::Node {
-  using GetDirection = custom_interfaces::srv::GetDirection;
+  using GetDirection = robot_patrol::srv::GetDirection;
 
 public:
   Patrol() : Node("robot_patrol_with_service") {
@@ -90,11 +90,11 @@ private:
     int size = static_cast<int>(msg->ranges.size()) - 1;
     // indx for forward +-45 degree on linear.x axis;
     int forward_start =
-        std::clamp(static_cast<int>(std::round((-M_PI / 6 - msg->angle_min) /
+        std::clamp(static_cast<int>(std::round((-M_PI / 7 - msg->angle_min) /
                                                msg->angle_increment)),
                    0, size);
     int forward_end =
-        std::clamp(static_cast<int>(std::round((M_PI / 6 - msg->angle_min) /
+        std::clamp(static_cast<int>(std::round((M_PI / 7 - msg->angle_min) /
                                                msg->angle_increment)),
                    0, size);
 

@@ -1,4 +1,3 @@
-#include "custom_interfaces/action/go_to_pose.hpp"
 #include "geometry_msgs/msg/detail/twist__struct.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/logging.hpp"
@@ -7,6 +6,7 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "rclcpp_action/server.hpp"
 #include "rclcpp_action/server_goal_handle.hpp"
+#include "robot_patrol/action/go_to_pose.hpp"
 #include <chrono>
 #include <cmath>
 #include <functional>
@@ -48,7 +48,7 @@ struct Pose2D {
 };
 
 class GoToPose : public rclcpp::Node {
-  using GoToPoseAction = custom_interfaces::action::GoToPose;
+  using GoToPoseAction = robot_patrol::action::GoToPose;
   using GoalHandle = rclcpp_action::ServerGoalHandle<GoToPoseAction>;
 
 public:
@@ -134,15 +134,13 @@ private:
     geometry_msgs::msg::Twist cmd;
     if (delta.distance > goal_tolerance_) {
       cmd.linear.x = 0.2;
-      cmd.angular.z = delta.angle_err * 0.8;
+      cmd.angular.z = std::clamp(delta.angle_err, -M_PI / 4, M_PI / 4);
+      pub_->publish(cmd);
+    } else if (std::abs(yaw_err) > 0.1) {
+      cmd.linear.x = 0;
+      cmd.angular.z = yaw_err * 0.8;
       pub_->publish(cmd);
     } else {
-      if (std::abs(yaw_err) > 0.1) {
-        cmd.linear.x = 0;
-        cmd.angular.z = yaw_err * 0.8;
-        pub_->publish(cmd);
-        return;
-      }
       pub_->publish(cmd);
 
       auto result = std::make_shared<GoToPoseAction::Result>();

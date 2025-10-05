@@ -1,11 +1,11 @@
-#include "custom_interfaces/srv/get_direction.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "robot_patrol/srv/get_direction.hpp"
 #include <algorithm>
 #include <utility>
 #include <vector>
 
 class DirectionService : public rclcpp::Node {
-  using GetDirection = custom_interfaces::srv::GetDirection;
+  using GetDirection = robot_patrol::srv::GetDirection;
 
 public:
   DirectionService() : Node("direction_service_server") {

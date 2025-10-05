@@ -13,7 +13,15 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
-find_package(custom_interfaces REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/GetDirection.srv"
+  "action/GoToPose.action"
+  DEPENDENCIES sensor_msgs geometry_msgs
+)
+
+ament_export_dependencies(rosidl_default_runtime)
 
 # Create executable
 add_executable(robot_patrol_node src/patrol.cpp)
@@ -24,10 +32,18 @@ add_executable(gotopose_action_server src/go_to_pose_action.cpp)
 
 # Add dependencies
 ament_target_dependencies(robot_patrol_node rclcpp sensor_msgs geometry_msgs nav_msgs tf2 tf2_geometry_msgs)
-ament_target_dependencies(robot_patrol_with_service rclcpp sensor_msgs geometry_msgs nav_msgs tf2 tf2_geometry_msgs custom_interfaces)
-ament_target_dependencies(direction_service_server rclcpp custom_interfaces)
-ament_target_dependencies(test_direction_service_client rclcpp custom_interfaces sensor_msgs)
-ament_target_dependencies(gotopose_action_server rclcpp rclcpp_action nav_msgs geometry_msgs custom_interfaces tf2 tf2_geometry_msgs)
+ament_target_dependencies(robot_patrol_with_service rclcpp sensor_msgs geometry_msgs nav_msgs tf2 tf2_geometry_msgs)
+ament_target_dependencies(direction_service_server rclcpp)
+ament_target_dependencies(test_direction_service_client rclcpp sensor_msgs)
+ament_target_dependencies(gotopose_action_server rclcpp rclcpp_action nav_msgs geometry_msgs tf2 tf2_geometry_msgs)
+
+rosidl_get_typesupport_target(cpp_typesupport_target
+  ${PROJECT_NAME} rosidl_typesupport_cpp)
+
+target_link_libraries(robot_patrol_with_service "${cpp_typesupport_target}")
+target_link_libraries(direction_service_server "${cpp_typesupport_target}")
+target_link_libraries(test_direction_service_client "${cpp_typesupport_target}")
+target_link_libraries(gotopose_action_server "${cpp_typesupport_target}")
 
 # Install executables
 install(TARGETS robot_patrol_node robot_patrol_with_service direction_service_server test_direction_service_client gotopose_action_server
@@ -40,7 +56,6 @@ install(DIRECTORY launch
 # Install config files
 install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}/)
-
 
 
 if(BUILD_TESTING)

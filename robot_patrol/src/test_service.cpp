@@ -1,14 +1,14 @@
-#include "custom_interfaces/srv/get_direction.hpp"
 #include "rclcpp/client.hpp"
 #include "rclcpp/executors.hpp"
 #include "rclcpp/future_return_code.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "robot_patrol/srv/get_direction.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include <chrono>
 
 class DirectionServiceClient : public rclcpp::Node {
-  using GetDirection = custom_interfaces::srv::GetDirection;
+  using GetDirection = robot_patrol::srv::GetDirection;
   using LaserScan = sensor_msgs::msg::LaserScan;
 
 public:
