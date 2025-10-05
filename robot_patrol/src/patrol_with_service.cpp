@@ -76,23 +76,19 @@ public:
     timer_ = create_wall_timer(
         std::chrono::milliseconds(100),
         [this]() { return move_around_robot(); }, reentrant_group_1_);
+    timer_lap_count_ = create_wall_timer(
+        std::chrono::milliseconds(500), [this]() { return check_lap_count(); },
+        reentrant_group_1_);
   };
-
-  int get_lap_count() const {
-    std::lock_guard<std::mutex> lck(mutex_);
-    return lap_count_;
-  }
-
-  void stop_robot() {
-    RCLCPP_INFO(get_logger(), "Robot is stopped");
-    geometry_msgs::msg::Twist cmd;
-    pub_->publish(cmd);
-  }
 
 private:
   void laser_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+    MissionState mission_state = get_mission_state();
+    if (mission_state == APPROACHING || mission_state == TURNING) {
+      return;
+    }
     int size = static_cast<int>(msg->ranges.size()) - 1;
-    // indx for forward +-30 degree on linear.x axis;
+    // indx for forward +-45 degree on linear.x axis;
     int forward_start =
         std::clamp(static_cast<int>(std::round((-M_PI / 6 - msg->angle_min) /
                                                msg->angle_increment)),
@@ -104,7 +100,7 @@ private:
 
     auto min_foward_distance = std::min_element(
         msg->ranges.begin() + forward_start, msg->ranges.begin() + forward_end);
-    if (*min_foward_distance >= 0.4) {
+    if (*min_foward_distance >= 0.35) {
       set_direction("forward");
     } else {
       auto request = std::make_shared<GetDirection::Request>();
@@ -183,6 +179,18 @@ private:
     return a;
   }
 
+  int get_lap_count() const {
+    std::lock_guard<std::mutex> lck(mutex_);
+    return lap_count_;
+  }
+
+  void check_lap_count() {
+    if (get_lap_count() >= 2) {
+      stop_robot();
+      RCLCPP_INFO(get_logger(), "Lap count reached 2. Shutting down...");
+      rclcpp::shutdown();
+    }
+  }
   void move_around_robot() {
     MissionState mission_state = get_mission_state();
     switch (mission_state) {
@@ -211,11 +219,11 @@ private:
                   "Waiting for /scan topic, direction is not set yet");
       return;
     } else if (dir == "right") {
-      cmd.angular.z = -0.6;
+      cmd.angular.z = -M_PI / 4;
     } else if (dir == "forward") {
       cmd.angular.z = 0.0;
     } else if (dir == "left") {
-      cmd.angular.z = 0.6;
+      cmd.angular.z = M_PI / 4;
     } else {
       RCLCPP_ERROR(get_logger(), "Unregisterd directioin is set: %s",
                    dir.c_str());
@@ -227,14 +235,20 @@ private:
 
   void turn_robot() {
     geometry_msgs::msg::Twist cmd;
-    cmd.angular.z = 0.4;
+    cmd.angular.z = M_PI / 8;
     pub_->publish(cmd);
   }
 
   void approach_robot() {
     geometry_msgs::msg::Twist cmd;
     cmd.linear.x = 0.1;
-    cmd.angular.z = std::clamp(1.0 * get_target_yaw(), -0.3, 0.3);
+    cmd.angular.z = std::clamp(1.0 * get_target_yaw(), -M_PI / 9, M_PI / 9);
+    pub_->publish(cmd);
+  }
+
+  void stop_robot() {
+    RCLCPP_INFO(get_logger(), "Robot is stopped");
+    geometry_msgs::msg::Twist cmd;
     pub_->publish(cmd);
   }
 
@@ -278,6 +292,7 @@ private:
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
   rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::TimerBase::SharedPtr timer_lap_count_;
   rclcpp::CallbackGroup::SharedPtr reentrant_group_1_;
   rclcpp::Client<GetDirection>::SharedPtr client_;
 
@@ -297,13 +312,6 @@ int main(int argc, char *argv[]) {
   rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(),
                                                     3);
   executor.add_node(node);
-  while (rclcpp::ok()) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    executor.spin_some();
-    if (node->get_lap_count() >= 2) {
-      node->stop_robot();
-      rclcpp::shutdown();
-    }
-  }
+  executor.spin();
   return 0;
 }
