@@ -140,7 +140,9 @@ private:
 
     geometry_msgs::msg::Twist cmd;
     if (delta.distance > goal_tolerance_) {
-      cmd.linear.x = 0.2;
+      if (std::abs(delta.angle_err) < 0.2) {
+        cmd.linear.x = 0.2;
+      }
       cmd.angular.z = std::clamp(delta.angle_err, -M_PI / 4, M_PI / 4);
       pub_->publish(cmd);
     } else if (std::abs(yaw_err) > 0.1) {
